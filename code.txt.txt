@@ -1,0 +1,99 @@
+// Obtain top 100 by popularity streamers
+MATCH (m:streamer) RETURN m.views_avg ORDER BY coalesce(m.views_avg,0) DESC LIMIT 100;
+
+// Is there any banned streamers amont the top 100
+MATCH (s:streamer)
+WITH s
+ORDER BY coalesce(s.views_avg,0) DESC LIMIT 100
+MATCH (s)
+WHERE s.followers IS  NULL
+RETURN s;
+
+
+// Only one streamers among the top 100 by popularity is in top 100 by amount of recommendations.
+MATCH (s1:streamer) <-[r:recommends]-(s2:streamer)
+WITH s1, count(s2) as amount_of_reccomendations
+ORDER BY coalesce(amount_of_reccomendations, 0) DESC 
+LIMIT 100
+WITH collect(s1.id) as recommended_top_100 // Find Most recommended streamers
+MATCH (s3:streamer) 
+WITH s3, recommended_top_100
+ORDER BY coalesce(s3.views_avg,0) DESC LIMIT 100
+MATCH (s3)
+WHERE s3.id IN recommended_top_100
+RETURN s3;
+
+// Cross recommendations among top streamers
+MATCH (s1:streamer)
+WITH s1
+ORDER BY coalesce(s1.views_avg,0) DESC LIMIT 100 
+WITH collect(s1.id) as top_100_popularity
+MATCH (s2:streamer)-[r1:recommends]->(s3:streamer)
+WHERE s2.id IN top_100_popularity AND s3.id IN top_100_popularity
+RETURN s2, r1, s3;
+
+
+\\ Majority of the top streamers dosnt share the same squad
+MATCH (s1:streamer)
+WITH s1
+ORDER BY coalesce(s1.views_avg,0) DESC LIMIT 100 
+WITH collect(s1.id) as top_100_popularity
+MATCH (s2)-[m2:member]->(sq2:squad)
+WHERE s2.id IN top_100_popularity
+RETURN s2, m2, sq2;
+
+
+\\ Recommendation clustering based on squad
+MATCH (s:streamer)
+WITH s
+ORDER BY coalesce(s.views_avg,0) DESC LIMIT 100 
+MATCH (s)-[:member]->(sq:squad)
+WITH sq
+MATCH (s1)-[m1:member]->(sq)
+WITH s1, m1, sq
+MATCH (s1)-[r1:recommends]->(:streamer)
+RETURN s1, r1, sq, m1;
+
+
+\\top 10 tags
+MATCH (t:tag) <-[:tagged]-(s:streamer)
+WITH t, count(s) as num_of_streamers
+RETURN t.id, num_of_streamers
+ORDER BY num_of_streamers DESC LIMIT 10;
+
+
+\\ Top streamers and top tags intersection
+MATCH (s:streamer) 
+WITH s 
+ORDER BY coalesce(s.views_avg,0) DESC LIMIT 100
+MATCH (t:tag) <-[tg:tagged]-(s)
+RETURN t, tg, s;
+
+
+\\ top 10 games by the amount of streamers
+MATCH (g:game) <-[:plays]-(s:streamer)
+WITH g, count(s) as num_of_streamers
+RETURN g.id, num_of_streamers
+ORDER BY num_of_streamers DESC LIMIT 10;
+
+
+\\ Top 100 gamers/games/tags inteaction
+
+MATCH (s:streamer) 
+WITH s 
+ORDER BY coalesce(s.views_avg,0) DESC LIMIT 100
+MATCH (t:tag) <-[tg:tagged]-(s)-[p:plays]-> (g:game)
+RETURN t, tg, s, p, g;
+
+\\ Top 10 gamers squads, games interaction
+MATCH (s:streamer) 
+WITH s 
+ORDER BY coalesce(s.views_avg,0) DESC LIMIT 10
+MATCH (sq:squad)<-[:member]-(s)
+WITH sq
+MATCH path = (sq)<-[:member]-(s1:streamer)-[:plays]->(g:game)
+RETURN path;
+
+
+
+
